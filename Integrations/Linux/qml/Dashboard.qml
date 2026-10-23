@@ -58,6 +58,7 @@ ApplicationWindow {
             Layout.fillWidth: true
             visible: window.selectedTab === 0 && desktop.entries.length > 0
             text: Usage.summary(desktop.entries, desktop.settings.quotaDisplay, window.clockNow)
+            textFormat: Text.PlainText
             wrapMode: Text.Wrap
             font.pixelSize: 26
             font.bold: true
