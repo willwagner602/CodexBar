@@ -34,12 +34,30 @@ Frame {
             Layout.fillWidth: true
             spacing: 4
             Label { text: "Billing"; font.pixelSize: root.cardFontSize; font.bold: true; visible: root.visible }
-            Label {
-                text: Usage.billingText(root.entry.extraUsage, true)
-                font.pixelSize: root.cardFontSize
+            RowLayout {
                 Layout.fillWidth: true
-                wrapMode: Text.Wrap
-                textFormat: Text.PlainText
+                Label {
+                    text: Usage.billingText(root.entry.extraUsage, true)
+                    font.pixelSize: root.cardFontSize
+                    Layout.fillWidth: true
+                    wrapMode: Text.Wrap
+                    textFormat: Text.PlainText
+                }
+                Label {
+                    visible: Usage.billingRemaining(root.entry.extraUsage) !== null
+                    text: Usage.quotaValue(Usage.billingRemaining(root.entry.extraUsage) || 0, desktop.settings.quotaDisplay) + "% " +
+                          (desktop.settings.quotaDisplay === "used" ? "used" : "left")
+                    font.pixelSize: root.cardFontSize
+                    font.bold: true
+                }
+            }
+            ProgressBar {
+                visible: Usage.billingRemaining(root.entry.extraUsage) !== null
+                Layout.fillWidth: true
+                from: 0; to: 100
+                value: Usage.quotaValue(Usage.billingRemaining(root.entry.extraUsage) || 0, desktop.settings.quotaDisplay)
+                palette.highlight: desktop.settings.warningColors &&
+                    (Usage.billingRemaining(root.entry.extraUsage) || 0) <= desktop.settings.notifyThreshold ? "#d97732" : root.accent
             }
         }
         Repeater {
@@ -76,7 +94,6 @@ Frame {
                         wrapMode: Text.Wrap
                     }
                 }
-                UsageChart { Layout.fillWidth: true; chart: modelData.chart; accent: root.accent }
             }
         }
     }

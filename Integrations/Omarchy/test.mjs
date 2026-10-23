@@ -101,6 +101,15 @@ test('hasBilling and billingText gate and compose the shared billing line', () =
     assert.equal(model.billingText({used: null, balance: 4.88}, true), 'Balance $4.88');
     assert.equal(model.billingText({used: 'x', balance: undefined}, false), '');
 });
+test('billing bars project the untouched share of the pool', () => {
+    assert.equal(model.billingRemaining({used: 0.47, balance: 4.87, limit: 0}), 91);
+    assert.equal(model.billingRemaining({used: 0.47, balance: 4.87}), 91);
+    assert.equal(model.billingRemaining({used: 2, limit: 8, balance: 1}), 75, 'a positive spend limit wins');
+    assert.equal(model.billingRemaining({used: 5.34, balance: 0}), 0, 'an exhausted pool reads zero');
+    assert.equal(model.billingRemaining({used: 1, limit: 0}), null);
+    assert.equal(model.billingRemaining({balance: 4}), null);
+    assert.equal(model.billingRemaining(null), null);
+});
 test('card windows keep everything but the representative session lane', () => {
     const windows = [{label: '5 hour', minutes: 300}, {label: '7 day', minutes: 10080},
         {label: 'Rate limit', minutes: null}, {label: 'Total usage', minutes: 43200}];

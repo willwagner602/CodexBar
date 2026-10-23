@@ -181,6 +181,19 @@ function billingText(cost, withPeriod) {
     return (withPeriod && cost.period ? cost.period + ": " : "") + parts.join(" · ");
 }
 
+// Share of a billing pool still available, in whole percent: against a positive spend limit
+// when the provider reports one, otherwise the untouched share of the amount funded so far.
+// Null when neither can be computed, so the card hides the bar instead of guessing.
+function billingRemaining(cost) {
+    if (!cost) return null;
+    var used = number(cost.used), limit = number(cost.limit), balance = number(cost.balance);
+    if (limit !== null && limit > 0 && used !== null)
+        return Math.round(Math.max(0, Math.min(100, 100 - 100 * used / limit)));
+    if (used !== null && balance !== null && used + balance > 0)
+        return Math.round(Math.max(0, Math.min(100, 100 * balance / (used + balance))));
+    return null;
+}
+
 function number(value) { return typeof value === "number" && isFinite(value) ? value : null; }
 
 function money(value) { return number(value) === null ? "Unavailable" : "$" + value.toFixed(2); }
