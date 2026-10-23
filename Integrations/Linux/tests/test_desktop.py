@@ -172,6 +172,23 @@ else:
         self.assertEqual(windows[0]['label'], 'Rate limit')
         self.assertEqual(windows[0]['remaining'], 80)
 
+    def test_billing_only_provider_is_not_marked_as_missing_quota(self):
+        (self.root / 'state.json').write_text(json.dumps({
+            'usage': {'loginMethod': 'Balance: $4.88',
+                      'providerCost': {'period': 'October 2026', 'currencyCode': 'USD',
+                                       'used': 0.46, 'balance': 4.88},
+                      'details': [{'title': 'Billing', 'rows': [{'label': 'Spent', 'value': '$0.46'}]}]}
+        }))
+        self.client('--configure', '{"provider":"typesafe"}')
+        value = self.wait_for(lambda value: value.get('entries') and not value['busy']
+                              and value['entries'][0]['provider'] == 'typesafe')
+        entry = value['entries'][0]
+        self.assertEqual(entry['windows'], [])
+        self.assertEqual(entry['error'], '')
+        self.assertEqual(entry['extraUsage']['balance'], 4.88)
+        self.assertEqual(entry['plan'], 'Balance: $4.88')
+        self.assertIn('Typesafe · Spent $0.46 · Balance $4.88', value['summary'])
+
     def test_panel_details_reach_snapshot_without_identity(self):
         (self.root / 'state.json').write_text(json.dumps({
             'usage': {'identity': {'accountEmail': 'private@example.com', 'loginMethod': 'Max'},

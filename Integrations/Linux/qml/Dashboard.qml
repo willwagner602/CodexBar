@@ -10,6 +10,8 @@ ApplicationWindow {
     minimumWidth: 480; minimumHeight: 420
     property int selectedTab: 0
     readonly property bool refreshing: selectedTab === 0 ? desktop.busy : desktop.costBusy
+    property double clockNow: Date.now()
+    Timer { interval: 30000; running: window.visible; repeat: true; onTriggered: window.clockNow = Date.now() }
     function refreshCurrent() {
         if (selectedTab === 0) desktop.refresh();
         else desktop.refreshCosts();
@@ -51,6 +53,14 @@ ApplicationWindow {
             visible: window.selectedTab === 0
             text: desktop.error || (desktop.busy ? "Refreshing usage…" : desktop.stale ? "Usage is out of date" :
                 desktop.updated ? "Updated " + desktop.updated : "Waiting for usage…")
+        }
+        Label {
+            Layout.fillWidth: true
+            visible: window.selectedTab === 0 && desktop.entries.length > 0
+            text: Usage.summary(desktop.entries, desktop.settings.quotaDisplay, window.clockNow)
+            wrapMode: Text.Wrap
+            font.pixelSize: 26
+            font.bold: true
         }
         ScrollView {
             id: scroll

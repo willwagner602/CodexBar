@@ -304,7 +304,7 @@ void DesktopController::showWindow(const QString &page) {
 void DesktopController::updateLabels() {
     const auto rows = m_engine.toScriptValue(m_entries);
     const auto mode = m_settings.value("quotaDisplay").toString();
-    m_summary = call(m_usageModel, "summary", {rows, mode}).toString();
+    m_summary = call(m_usageModel, "summary", {rows, mode, double(QDateTime::currentMSecsSinceEpoch())}).toString();
     // The bar keeps its single leading percentage until these are switched on, so an upgrade
     // changes nothing; the limit is display only and never stops a provider being polled.
     auto options = m_engine.newObject();

@@ -112,7 +112,8 @@ function rows(text, showIdentity) {
             extraUsage: providerCost(usage.providerCost),
             resetCredits: resetCredits(entry.resetCredits),
             error: entry.error ? "Usage unavailable. Check this provider’s CodexBar login/configuration." :
-                windows.length ? "" : "No quota windows reported."
+                windows.length || (usage.details || []).length || usage.providerCost || entry.credits ? "" :
+                    "No quota windows reported."
         };
     });
 }
@@ -221,6 +222,30 @@ function laneOfCadence(windows, matches) {
 
 function sessionWindow(windows) {
     return laneOfCadence(windows, function(item) { return item.minutes >= 60 && item.minutes <= 720; });
+}
+
+function summaryWindow(windows) {
+    return sessionWindow(windows) || (windows && windows.length ? windows[0] : null);
+}
+
+function periodHoursText(item, now) {
+    if (!item || !item.minutes || item.minutes <= 0) return "";
+    var total = item.minutes / 60;
+    var reset = Date.parse(item.resetsAt);
+    if (!isFinite(reset)) return "";
+    var remaining = Math.min(total, Math.max(0, reset - now) / 3600000);
+    function format(value) {
+        var rounded = Math.round(value * 10) / 10;
+        return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+    }
+    var unit = total >= 24 && total % 24 === 0 ? "days" : "hours";
+    if (unit === "days") return format(remaining / 24) + "/" + format(total / 24) + " days";
+    return format(remaining) + "/" + format(total) + " hours";
+}
+
+// The dashboard shows this representative short-term lane in its provider summary, not again in each card.
+function longTermWindows(windows) {
+    return (windows || []).filter(function(item) { return item.minutes < 60 || item.minutes > 720; });
 }
 
 function weeklyWindow(windows) {
@@ -350,10 +375,27 @@ function barSegments(entries, mode, options) {
     });
 }
 
-function summary(entries, mode) {
-    var shown = barSegments(entries, mode);
-    var label = shown.map(function(entry) { return entry.tag + " " + entry.text; }).join("  ·  ");
-    return label + (entries.length > shown.length ? "  +" + (entries.length - shown.length) : "");
+function summary(entries, mode, now) {
+    now = number(now) === null ? Date.now() : now;
+    return entries.map(function(entry) {
+        var item = summaryWindow(entry.windows || []);
+        if (!item) {
+            var balance = entry.extraUsage ? entry.extraUsage.balance :
+                entry.providerCost ? entry.providerCost.balance : null;
+            var spent = entry.extraUsage ? entry.extraUsage.used :
+                entry.providerCost ? entry.providerCost.used : null;
+            var billing = [];
+            if (number(spent) !== null) billing.push("Spent " + money(spent));
+            if (number(balance) !== null) billing.push("Balance " + money(balance));
+            if (billing.length) return providerName(entry.provider) + " · " + billing.join(" · ");
+            if (entry.details && entry.details.length) return providerName(entry.provider) + " · Billing available";
+            return providerName(entry.provider) + " · Usage unavailable";
+        }
+        var time = periodHoursText(item, now);
+        return providerName(entry.provider) + " · " + item.label + " · " +
+            quotaValue(item.remaining, mode) + "%" + (mode === "used" ? " used" : "") +
+            (time ? " · " + time : "");
+    }).join("\n");
 }
 
 function resetLabel(value, now) {
