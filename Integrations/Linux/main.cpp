@@ -163,7 +163,7 @@ int main(int argc, char **argv) {
     });
     auto updateTray = [&] {
         tray.setVisible(!noTray && controller.settings().value("showTray").toBool());
-        tray.setToolTip("CodexBar · " + (controller.summary().isEmpty() ? "Usage unavailable" : controller.summary()) +
+        tray.setToolTip("CodexBar\n" + (controller.summary().isEmpty() ? "Usage unavailable" : controller.summary()) +
             " · " + controller.settings().value("quotaDisplay").toString() + (controller.stale() ? " · out of date" : ""));
         if (controller.settings().value("trayStyle") == "icon") { tray.setIcon(QIcon(":/icon.svg")); return; }
         QVariantList windows;

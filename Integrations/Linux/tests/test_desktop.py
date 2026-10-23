@@ -11,6 +11,13 @@ import unittest
 APP = Path(os.environ.get('CODEXBAR_LINUX_BINARY', '.local/linux-build/codexbar-linux')).resolve()
 
 
+def far_future_reset():
+    # Reset stamps far enough ahead that the projected remaining time clamps to the window
+    # total, so "5/5 hours" style assertions stay valid as the wall clock advances.
+    return (datetime.datetime.now(datetime.timezone.utc) +
+            datetime.timedelta(days=3650)).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+
 class DesktopTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
@@ -37,7 +44,7 @@ if args[0]=='cost':
  'daily':[{'date':datetime.date.today().isoformat(),'totalCost':3}], 'totals':{'inputTokens':100}}]))
 else:
  usage=state.get('usage',{'identity':{'accountEmail':'private@example.com'},
- 'primary':{'usedPercent':40,'windowMinutes':300,'resetsAt':'2030-01-01T00:00:00Z'}})
+ 'primary':{'usedPercent':40,'windowMinutes':300,'resetsAt':(datetime.datetime.now(datetime.timezone.utc)+datetime.timedelta(days=3650)).strftime('%Y-%m-%dT%H:%M:%SZ')}})
  answered=state.get('answerAs',{}).get(provider,provider)
  print(json.dumps([{'provider':answered,'usage':usage,'rateWindowLabels':state.get('rateWindowLabels'),'pace':state.get('pace'),'resetCredits':state.get('resetCredits'),'status':state.get('status')}]))
 ''')
@@ -85,7 +92,7 @@ else:
         first = self.client('--snapshot')
         for _ in range(3):
             self.assertEqual(self.client('--background')['pid'], first['pid'])
-        self.assertEqual(first['summary'], 'CX 60%')
+        self.assertEqual(first['summary'], 'Codex · 5 hour · 60% · 5/5 hours')
         self.assertEqual(first['barEntries'], [{'provider': 'codex', 'tag': 'CX', 'text': '60%'}])
         self.assertNotIn('private@example.com', json.dumps(first))
         self.assertNotIn('executable', first)
@@ -128,7 +135,7 @@ else:
         self.assertRegex(windows[1]['key'], r'^extra:[a-f0-9]{64}$')
         self.assertEqual(windows[1]['label'], 'Model cap [hidden email]')
         self.assertEqual(windows[1]['remaining'], 7)
-        self.assertEqual(value['summary'], 'CL 61%')
+        self.assertEqual(value['summary'], 'Claude · 7 day · 61%')
         self.client('--usage')
         self.client('--refresh')
         refreshed = self.wait_for(lambda value: not value['busy'])
@@ -140,7 +147,7 @@ else:
         def pool(used, minutes, reset):
             return {'usedPercent': used, 'windowMinutes': minutes, 'resetsAt': reset}
         gemini_weekly = pool(95, 10080, '2030-01-03T00:00:00Z')
-        claude_session = pool(100, 300, '2030-01-01T05:00:00Z')
+        claude_session = pool(100, 300, far_future_reset())
         usage = {'primary': gemini_weekly, 'secondary': claude_session, 'extraRateWindows': [
             {'id': 'antigravity-quota-summary-' + key, 'title': title, 'usageKnown': True, 'window': window}
             for key, title, window in [
@@ -156,7 +163,7 @@ else:
         self.assertEqual([(window['label'], window['remaining']) for window in windows], [
             ('Gemini weekly', 5), ('Claude/GPT 5-hour', 0), ('Gemini 5-hour', 97), ('Claude/GPT weekly', 100)])
         self.assertEqual(len({window['key'] for window in windows}), 4)
-        self.assertEqual(value['summary'], 'antigravity 5%')
+        self.assertEqual(value['summary'], 'Antigravity · Claude/GPT 5-hour · 0% · 5/5 hours')
 
     def test_provider_window_labels_reach_private_snapshot(self):
         (self.root / 'state.json').write_text(json.dumps({
@@ -171,6 +178,25 @@ else:
         self.assertEqual(windows[0]['key'], 'secondary')
         self.assertEqual(windows[0]['label'], 'Rate limit')
         self.assertEqual(windows[0]['remaining'], 80)
+
+    def test_billing_only_provider_is_not_marked_as_missing_quota(self):
+        (self.root / 'state.json').write_text(json.dumps({
+            'usage': {'loginMethod': 'Balance: $4.88',
+                      'providerCost': {'period': 'October 2026', 'currencyCode': 'USD',
+                                       'used': 0.46, 'balance': 4.88},
+                      'details': [{'title': 'Billing', 'rows': [{'label': 'Spent', 'value': '$0.46'}]},
+                                  {'title': 'Hourly tokens', 'rows': [{'label': 'GLM-5.3-flash', 'value': '71.4M'}]},
+                                  {'title': 'Daily tokens', 'rows': [{'label': 'GLM-5.3-flash', 'value': '341M'}]}]}
+        }))
+        self.client('--configure', '{"provider":"typesafe"}')
+        value = self.wait_for(lambda value: value.get('entries') and not value['busy']
+                              and value['entries'][0]['provider'] == 'typesafe')
+        entry = value['entries'][0]
+        self.assertEqual(entry['windows'], [])
+        self.assertEqual(entry['error'], '')
+        self.assertEqual(entry['extraUsage']['balance'], 4.88)
+        self.assertEqual(entry['plan'], 'Balance: $4.88')
+        self.assertIn('Typesafe · Spent $0.46 · Balance $4.88', value['summary'])
 
     def test_panel_details_reach_snapshot_without_identity(self):
         (self.root / 'state.json').write_text(json.dumps({
@@ -227,8 +253,8 @@ else:
         self.assertEqual(value['spending'][0]['month'], 12)
 
     def test_bar_detail_caps_and_pace_are_independent_preferences(self):
-        usage = {'primary': {'usedPercent': 63, 'windowMinutes': 300, 'resetsAt': '2030-01-01T05:00:00Z'},
-                 'secondary': {'usedPercent': 39, 'windowMinutes': 10080, 'resetsAt': '2030-01-03T00:00:00Z'},
+        usage = {'primary': {'usedPercent': 63, 'windowMinutes': 300, 'resetsAt': far_future_reset()},
+                 'secondary': {'usedPercent': 39, 'windowMinutes': 10080, 'resetsAt': far_future_reset()},
                  'extraRateWindows': [{'id': 'claude-weekly-scoped-fable', 'title': 'Fable only',
                                        'window': {'usedPercent': 100, 'windowMinutes': 10080}}]}
         (self.root / 'state.json').write_text(json.dumps({
@@ -248,8 +274,8 @@ else:
         self.assertEqual(self.client('--snapshot')['barEntries'][0]['text'], '5H 37% · 7D 61% · Fable 0%')
         self.assertTrue(self.client('--configure', '{"showBarDetail":false}')['ok'])
         self.assertEqual(self.client('--snapshot')['barEntries'][0]['text'], '37% · Fable 0%')
-        # The tray tooltip keeps its own compact form.
-        self.assertEqual(value['summary'], 'CX 37%')
+        # The tray tooltip reads the same summary text as the dashboard.
+        self.assertEqual(value['summary'], 'Codex · 5 hour · 37% · 5/5 hours')
 
     def test_bar_provider_limit_validates_and_only_changes_display(self):
         providers = ['codex', 'claude', 'acme']
@@ -257,14 +283,20 @@ else:
             'provider': 'custom', 'providerOrder': providers}))['ok'])
         value = self.wait_for(lambda value: len(value.get('entries', [])) == 3 and not value['busy'])
         self.assertEqual([row['provider'] for row in value['barEntries']], providers[:2])
-        self.assertEqual(value['summary'], 'CX 60%  ·  CL 60%  +1')
+        self.assertEqual(value['summary'],
+                         'Codex · 5 hour · 60% · 5/5 hours\n'
+                         'Claude · 5 hour · 60% · 5/5 hours\n'
+                         'Acme · 5 hour · 60% · 5/5 hours')
         calls = (self.root / 'calls.jsonl').read_text()
         for limit in [1, 0, 80, 2]:
             self.assertTrue(self.client('--configure', json.dumps({'barProviders': limit}))['ok'])
             value = self.client('--snapshot')
             self.assertEqual([row['provider'] for row in value['barEntries']], providers[:limit or None])
             self.assertEqual([row['provider'] for row in value['entries']], providers)
-            self.assertEqual(value['summary'], 'CX 60%  ·  CL 60%  +1')
+            self.assertEqual(value['summary'],
+                             'Codex · 5 hour · 60% · 5/5 hours\n'
+                             'Claude · 5 hour · 60% · 5/5 hours\n'
+                             'Acme · 5 hour · 60% · 5/5 hours')
         self.assertEqual((self.root / 'calls.jsonl').read_text(), calls)
         settings = self.root / 'config/codexbar/linux.json'
         saved = settings.read_bytes()
@@ -324,7 +356,7 @@ else:
         self.client('--refresh')
         value = self.wait_for(lambda value: bool(value.get('error')))
         self.assertTrue(value['stale'])
-        self.assertEqual(value['summary'], 'CX 60%')
+        self.assertEqual(value['summary'], 'Codex · 5 hour · 60% · 5/5 hours')
 
     def test_quick_view_is_opt_in_and_never_scans_cost_on_open(self):
         calls = self.root / 'calls.jsonl'
@@ -408,7 +440,7 @@ else:
         count = len((self.root / 'calls.jsonl').read_text().splitlines())
         self.client('--configure', '{"quotaDisplay":"used","resetDisplay":"absolute"}')
         value = self.client('--snapshot')
-        self.assertEqual(value['summary'], 'CX 40%')
+        self.assertEqual(value['summary'], 'Codex · 5 hour · 40% used · 5/5 hours')
         self.assertEqual(value['barEntries'], [{'provider': 'codex', 'tag': 'CX', 'text': '40%'}])
         self.assertEqual(value['entries'][0]['windows'][0]['displayValue'], 40)
         self.assertEqual(value['entries'][0]['windows'][0]['displaySuffix'], 'used')

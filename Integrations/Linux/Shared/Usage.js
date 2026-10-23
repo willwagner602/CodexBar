@@ -48,8 +48,8 @@ function rows(text, showIdentity) {
         var extras = (Array.isArray(usage.extraRateWindows) ? usage.extraRateWindows : []).filter(measured);
         // Antigravity lists every pool as a quota-summary extra and copies one per model family
         // into its positional windows. Show each representative in its positional slot under
-        // the family's title and drop its extra copy: the tray and summary read the leading
-        // windows, and the extra limit below must not hide a representative. The row keeps the
+        // the family's title and drop its extra copy: the tray reads the leading windows, and
+        // the extra limit below must not hide a representative. The row keeps the
         // pool's own key, so its alert history follows it when another pool becomes binding.
         // Families are matched as Core selects them, because two families can report equal values.
         var families = {primary: "gemini", secondary: "claude-gpt"};
@@ -112,7 +112,8 @@ function rows(text, showIdentity) {
             extraUsage: providerCost(usage.providerCost),
             resetCredits: resetCredits(entry.resetCredits),
             error: entry.error ? "Usage unavailable. Check this provider’s CodexBar login/configuration." :
-                windows.length ? "" : "No quota windows reported."
+                windows.length || (usage.details || []).length || usage.providerCost || entry.credits ? "" :
+                    "No quota windows reported."
         };
     });
 }
@@ -159,6 +160,38 @@ function providerCost(value) {
     var result = {period: displayText(value.period, false).trim(), currency: displayText(value.currencyCode, false).trim(),
         used: number(value.used), limit: number(value.limit), balance: number(value.balance)};
     return result.used === null && result.limit === null && result.balance === null ? null : result;
+}
+
+// A usage card shows its billing section only when a spend or balance amount is measurable;
+// values that arrive as null or undefined must not turn the whole binding into undefined.
+function hasBilling(entry) {
+    var cost = entry && entry.extraUsage;
+    return !!cost && (number(cost.used) !== null || number(cost.balance) !== null);
+}
+
+// One composer for the billing line, "Spent $x · Balance $y", optionally prefixed with the
+// provider's period; the dashboard headline and the usage card both render from this so the
+// two surfaces cannot drift.
+function billingText(cost, withPeriod) {
+    if (!cost) return "";
+    var parts = [];
+    if (number(cost.used) !== null) parts.push("Spent " + money(cost.used));
+    if (number(cost.balance) !== null) parts.push("Balance " + money(cost.balance));
+    if (!parts.length) return "";
+    return (withPeriod && cost.period ? cost.period + ": " : "") + parts.join(" · ");
+}
+
+// Share of a billing pool still available, in whole percent: against a positive spend limit
+// when the provider reports one, otherwise the untouched share of the amount funded so far.
+// Null when neither can be computed, so the card hides the bar instead of guessing.
+function billingRemaining(cost) {
+    if (!cost) return null;
+    var used = number(cost.used), limit = number(cost.limit), balance = number(cost.balance);
+    if (limit !== null && limit > 0 && used !== null)
+        return Math.round(Math.max(0, Math.min(100, 100 - 100 * used / limit)));
+    if (used !== null && balance !== null && used + balance > 0)
+        return Math.round(Math.max(0, Math.min(100, 100 * balance / (used + balance))));
+    return null;
 }
 
 function number(value) { return typeof value === "number" && isFinite(value) ? value : null; }
@@ -221,6 +254,30 @@ function laneOfCadence(windows, matches) {
 
 function sessionWindow(windows) {
     return laneOfCadence(windows, function(item) { return item.minutes >= 60 && item.minutes <= 720; });
+}
+
+function summaryWindow(windows) {
+    return sessionWindow(windows) || (windows && windows.length ? windows[0] : null);
+}
+
+function periodRemainingText(item, now) {
+    if (!item || !item.minutes || item.minutes <= 0) return "";
+    var total = item.minutes / 60;
+    var reset = Date.parse(item.resetsAt);
+    if (!isFinite(reset)) return "";
+    var remaining = Math.min(total, Math.max(0, reset - now) / 3600000);
+    function format(value) {
+        var rounded = Math.round(value * 10) / 10;
+        return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+    }
+    var unit = total >= 24 && total % 24 === 0 ? "days" : "hours";
+    if (unit === "days") return format(remaining / 24) + "/" + format(total / 24) + " days";
+    return format(remaining) + "/" + format(total) + " hours";
+}
+
+// The dashboard shows this representative short-term lane in its provider summary, not again in each card.
+function cardWindows(windows) {
+    return (windows || []).filter(function(item) { return item.minutes < 60 || item.minutes > 720; });
 }
 
 function weeklyWindow(windows) {
@@ -350,10 +407,23 @@ function barSegments(entries, mode, options) {
     });
 }
 
-function summary(entries, mode) {
-    var shown = barSegments(entries, mode);
-    var label = shown.map(function(entry) { return entry.tag + " " + entry.text; }).join("  ·  ");
-    return label + (entries.length > shown.length ? "  +" + (entries.length - shown.length) : "");
+function summary(entries, mode, now) {
+    now = number(now) === null ? Date.now() : now;
+    return entries.map(function(entry) {
+        var item = summaryWindow(entry.windows || []);
+        if (!item) {
+            var billing = billingText(entry.extraUsage, false);
+            if (billing) return providerName(entry.provider) + " · " + billing;
+            if (number(entry.credits) !== null)
+                return providerName(entry.provider) + " · Credits " + money(entry.credits);
+            if (entry.details && entry.details.length) return providerName(entry.provider) + " · Billing available";
+            return providerName(entry.provider) + " · Usage unavailable";
+        }
+        var time = periodRemainingText(item, now);
+        return providerName(entry.provider) + " · " + item.label + " · " +
+            quotaValue(item.remaining, mode) + "%" + (mode === "used" ? " used" : "") +
+            (time ? " · " + time : "");
+    }).join("\n");
 }
 
 function resetLabel(value, now) {
