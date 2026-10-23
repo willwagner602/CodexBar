@@ -67,6 +67,13 @@ struct TavilyPluginTests {
     }
 
     @Test(arguments: BundledPluginTestSupport.engines)
+    func `null paygo limit reports unlimited rather than failing`(engine: ProviderPluginEngineKind) async throws {
+        let snapshot = try await Self.fetch(
+            engine: engine, body: Self.fixture.replacingOccurrences(of: #""paygo_limit":100"#, with: #""paygo_limit":null"#))
+        #expect(snapshot.details[2].rows.map(\.value) == ["25 credits", "Unlimited"])
+    }
+
+    @Test(arguments: BundledPluginTestSupport.engines)
     func `zero usage and omitted optional paygo preserve valid totals`(engine: ProviderPluginEngineKind) async throws {
         let snapshot = try await Self.fetch(
             engine: engine,

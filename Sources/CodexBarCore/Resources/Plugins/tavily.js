@@ -42,7 +42,9 @@ defineProvider({
       { title: "API key", rows: rows(keyUsed, keyLimit) },
     ];
     if (account.paygo_usage !== undefined || account.paygo_limit !== undefined) {
-      details.push({ title: "Pay as you go", rows: rows(count(account.paygo_usage), count(account.paygo_limit)) });
+      // Tavily sends paygo_limit: null on accounts without pay-as-you-go enabled.
+      const paygoLimit = account.paygo_limit === null ? null : count(account.paygo_limit);
+      details.push({ title: "Pay as you go", rows: rows(count(account.paygo_usage), paygoLimit) });
     }
     const plan = account.current_plan;
     if (plan !== undefined && (typeof plan !== "string" || !plan.trim() || plan.length > 120)) return fail();
