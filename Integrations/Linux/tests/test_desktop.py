@@ -184,7 +184,9 @@ else:
             'usage': {'loginMethod': 'Balance: $4.88',
                       'providerCost': {'period': 'October 2026', 'currencyCode': 'USD',
                                        'used': 0.46, 'balance': 4.88},
-                      'details': [{'title': 'Billing', 'rows': [{'label': 'Spent', 'value': '$0.46'}]}]}
+                      'details': [{'title': 'Billing', 'rows': [{'label': 'Spent', 'value': '$0.46'}]},
+                                  {'title': 'Hourly tokens', 'rows': [{'label': 'GLM-5.3-flash', 'value': '71.4M'}]},
+                                  {'title': 'Daily tokens', 'rows': [{'label': 'GLM-5.3-flash', 'value': '341M'}]}]}
         }))
         self.client('--configure', '{"provider":"typesafe"}')
         value = self.wait_for(lambda value: value.get('entries') and not value['busy']

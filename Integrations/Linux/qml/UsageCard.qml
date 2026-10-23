@@ -77,21 +77,56 @@ Frame {
             }
         }
         Label { text: "Credits: " + root.entry.credits; font.pixelSize: root.cardFontSize; visible: root.entry.credits !== null && root.entry.credits !== undefined }
-        Repeater {
-            model: root.entry.details || []
+        RowLayout {
+            visible: (root.entry.details || []).length > 0
+            Layout.fillWidth: true
+            spacing: 16
             ColumnLayout {
-                required property var modelData
                 Layout.fillWidth: true
-                Label { text: modelData.title; visible: text !== ""; font.pixelSize: root.cardFontSize; font.bold: true }
+                spacing: 6
                 Repeater {
-                    model: modelData.rows
-                    Label {
+                    model: root.entry.details && root.entry.details.length ? [root.entry.details[0]] : []
+                    ColumnLayout {
                         required property var modelData
                         Layout.fillWidth: true
-                        font.pixelSize: root.cardFontSize
-                        text: modelData.label + ": " + modelData.value + (modelData.secondaryValue ? " · " + modelData.secondaryValue : "")
-                        textFormat: Text.PlainText
-                        wrapMode: Text.Wrap
+                        spacing: 6
+                        Label { text: modelData.title; visible: text !== ""; font.pixelSize: root.cardFontSize; font.bold: true }
+                        Repeater {
+                            model: modelData.rows
+                            Label {
+                                required property var modelData
+                                Layout.fillWidth: true
+                                font.pixelSize: root.cardFontSize
+                                text: modelData.label + ": " + modelData.value + (modelData.secondaryValue ? " · " + modelData.secondaryValue : "")
+                                textFormat: Text.PlainText
+                                wrapMode: Text.Wrap
+                            }
+                        }
+                    }
+                }
+            }
+            ColumnLayout {
+                visible: (root.entry.details || []).length > 1
+                Layout.fillWidth: true
+                spacing: 12
+                Repeater {
+                    model: root.entry.details ? root.entry.details.slice(1) : []
+                    ColumnLayout {
+                        required property var modelData
+                        Layout.fillWidth: true
+                        spacing: 6
+                        Label { text: modelData.title; visible: text !== ""; font.pixelSize: root.cardFontSize; font.bold: true }
+                        Repeater {
+                            model: modelData.rows
+                            Label {
+                                required property var modelData
+                                Layout.fillWidth: true
+                                font.pixelSize: root.cardFontSize
+                                text: modelData.label + ": " + modelData.value + (modelData.secondaryValue ? " · " + modelData.secondaryValue : "")
+                                textFormat: Text.PlainText
+                                wrapMode: Text.Wrap
+                            }
+                        }
                     }
                 }
             }
