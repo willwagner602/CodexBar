@@ -11,6 +11,13 @@ import unittest
 APP = Path(os.environ.get('CODEXBAR_LINUX_BINARY', '.local/linux-build/codexbar-linux')).resolve()
 
 
+def far_future_reset():
+    # Reset stamps far enough ahead that the projected remaining time clamps to the window
+    # total, so "5/5 hours" style assertions stay valid as the wall clock advances.
+    return (datetime.datetime.now(datetime.timezone.utc) +
+            datetime.timedelta(days=3650)).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+
 class DesktopTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
@@ -37,7 +44,7 @@ if args[0]=='cost':
  'daily':[{'date':datetime.date.today().isoformat(),'totalCost':3}], 'totals':{'inputTokens':100}}]))
 else:
  usage=state.get('usage',{'identity':{'accountEmail':'private@example.com'},
- 'primary':{'usedPercent':40,'windowMinutes':300,'resetsAt':'2030-01-01T00:00:00Z'}})
+ 'primary':{'usedPercent':40,'windowMinutes':300,'resetsAt':(datetime.datetime.now(datetime.timezone.utc)+datetime.timedelta(days=3650)).strftime('%Y-%m-%dT%H:%M:%SZ')}})
  answered=state.get('answerAs',{}).get(provider,provider)
  print(json.dumps([{'provider':answered,'usage':usage,'rateWindowLabels':state.get('rateWindowLabels'),'pace':state.get('pace'),'resetCredits':state.get('resetCredits'),'status':state.get('status')}]))
 ''')
@@ -140,7 +147,7 @@ else:
         def pool(used, minutes, reset):
             return {'usedPercent': used, 'windowMinutes': minutes, 'resetsAt': reset}
         gemini_weekly = pool(95, 10080, '2030-01-03T00:00:00Z')
-        claude_session = pool(100, 300, '2030-01-01T05:00:00Z')
+        claude_session = pool(100, 300, far_future_reset())
         usage = {'primary': gemini_weekly, 'secondary': claude_session, 'extraRateWindows': [
             {'id': 'antigravity-quota-summary-' + key, 'title': title, 'usageKnown': True, 'window': window}
             for key, title, window in [
@@ -244,8 +251,8 @@ else:
         self.assertEqual(value['spending'][0]['month'], 12)
 
     def test_bar_detail_caps_and_pace_are_independent_preferences(self):
-        usage = {'primary': {'usedPercent': 63, 'windowMinutes': 300, 'resetsAt': '2030-01-01T05:00:00Z'},
-                 'secondary': {'usedPercent': 39, 'windowMinutes': 10080, 'resetsAt': '2030-01-03T00:00:00Z'},
+        usage = {'primary': {'usedPercent': 63, 'windowMinutes': 300, 'resetsAt': far_future_reset()},
+                 'secondary': {'usedPercent': 39, 'windowMinutes': 10080, 'resetsAt': far_future_reset()},
                  'extraRateWindows': [{'id': 'claude-weekly-scoped-fable', 'title': 'Fable only',
                                        'window': {'usedPercent': 100, 'windowMinutes': 10080}}]}
         (self.root / 'state.json').write_text(json.dumps({

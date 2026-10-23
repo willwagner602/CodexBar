@@ -76,6 +76,46 @@ test('reset countdown handles invalid and elapsed timestamps', () => {
     assert.equal(model.resetLabel('2025-12-31T23:00:00Z', now), 'Reset due · refresh to update');
     assert.equal(model.resetLabel('2026-01-01T01:30:00Z', now), 'Resets in 1h 30m');
 });
+test('periodRemainingText projects partial remaining, rounding, day units and unparseable resets', () => {
+    const now = Date.parse('2026-10-23T12:00:00Z');
+    const project = (minutes, resetsAt) => model.periodRemainingText({minutes, resetsAt}, now);
+    assert.equal(project(300, '2026-10-23T14:30:00Z'), '2.5/5 hours');
+    assert.equal(project(300, '2026-10-23T13:14:24Z'), '1.2/5 hours');
+    assert.equal(project(300, '2026-10-23T10:00:00Z'), '0/5 hours', 'an elapsed reset clamps to zero');
+    assert.equal(project(10080, '2026-10-25T00:00:00Z'), '1.5/7 days');
+    assert.equal(project(300, 'not a date'), '');
+    assert.equal(project(300, ''), '');
+    assert.equal(project(null, '2026-10-23T14:30:00Z'), '');
+});
+test('hasBilling and billingText gate and compose the shared billing line', () => {
+    assert.equal(model.hasBilling({}), false);
+    assert.equal(model.hasBilling({extraUsage: null}), false);
+    assert.equal(model.hasBilling({extraUsage: {}}), false);
+    assert.equal(model.hasBilling({extraUsage: {used: 0, balance: null}}), true, 'a zero spend is measurable');
+    assert.equal(model.hasBilling({extraUsage: {used: null, balance: 4.88}}), true);
+    assert.equal(model.billingText(null, true), '');
+    assert.equal(model.billingText({used: 0.46, balance: 4.88, period: 'October 2026'}, false),
+        'Spent $0.46 · Balance $4.88');
+    assert.equal(model.billingText({used: 0.46, balance: 4.88, period: 'October 2026'}, true),
+        'October 2026: Spent $0.46 · Balance $4.88');
+    assert.equal(model.billingText({used: null, balance: 4.88}, true), 'Balance $4.88');
+    assert.equal(model.billingText({used: 'x', balance: undefined}, false), '');
+});
+test('card windows keep everything but the representative session lane', () => {
+    const windows = [{label: '5 hour', minutes: 300}, {label: '7 day', minutes: 10080},
+        {label: 'Rate limit', minutes: null}, {label: 'Total usage', minutes: 43200}];
+    assert.deepEqual([...model.cardWindows(windows).map(item => item.label)],
+        ['7 day', 'Rate limit', 'Total usage']);
+    assert.deepEqual([...model.cardWindows(null)], []);
+});
+test('windowless providers report billing, credits, details or unavailability', () => {
+    assert.equal(model.summary([{provider: 'acme', windows: [], extraUsage: {used: 0.46, balance: 4.88}}]),
+        'Acme · Spent $0.46 · Balance $4.88');
+    assert.equal(model.summary([{provider: 'acme', windows: [], credits: 5}]), 'Acme · Credits $5.00');
+    assert.equal(model.summary([{provider: 'acme', windows: [], details: [{title: 'Billing', rows: []}]}]),
+        'Acme · Billing available');
+    assert.equal(model.summary([{provider: 'acme', windows: []}]), 'Acme · Usage unavailable');
+});
 test('account selection is scoped to a single provider and arguments never use a shell', () => {
     const command = model.command({provider: 'both', allAccounts: true, accountIndex: 2});
     assert.ok(!command.includes('--all-accounts'));

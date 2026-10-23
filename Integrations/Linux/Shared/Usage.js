@@ -169,6 +169,18 @@ function hasBilling(entry) {
     return !!cost && (number(cost.used) !== null || number(cost.balance) !== null);
 }
 
+// One composer for the billing line, "Spent $x · Balance $y", optionally prefixed with the
+// provider's period; the dashboard headline and the usage card both render from this so the
+// two surfaces cannot drift.
+function billingText(cost, withPeriod) {
+    if (!cost) return "";
+    var parts = [];
+    if (number(cost.used) !== null) parts.push("Spent " + money(cost.used));
+    if (number(cost.balance) !== null) parts.push("Balance " + money(cost.balance));
+    if (!parts.length) return "";
+    return (withPeriod && cost.period ? cost.period + ": " : "") + parts.join(" · ");
+}
+
 function number(value) { return typeof value === "number" && isFinite(value) ? value : null; }
 
 function money(value) { return number(value) === null ? "Unavailable" : "$" + value.toFixed(2); }
@@ -235,7 +247,7 @@ function summaryWindow(windows) {
     return sessionWindow(windows) || (windows && windows.length ? windows[0] : null);
 }
 
-function periodHoursText(item, now) {
+function periodRemainingText(item, now) {
     if (!item || !item.minutes || item.minutes <= 0) return "";
     var total = item.minutes / 60;
     var reset = Date.parse(item.resetsAt);
@@ -251,7 +263,7 @@ function periodHoursText(item, now) {
 }
 
 // The dashboard shows this representative short-term lane in its provider summary, not again in each card.
-function longTermWindows(windows) {
+function cardWindows(windows) {
     return (windows || []).filter(function(item) { return item.minutes < 60 || item.minutes > 720; });
 }
 
@@ -387,18 +399,14 @@ function summary(entries, mode, now) {
     return entries.map(function(entry) {
         var item = summaryWindow(entry.windows || []);
         if (!item) {
-            var balance = entry.extraUsage ? entry.extraUsage.balance :
-                entry.providerCost ? entry.providerCost.balance : null;
-            var spent = entry.extraUsage ? entry.extraUsage.used :
-                entry.providerCost ? entry.providerCost.used : null;
-            var billing = [];
-            if (number(spent) !== null) billing.push("Spent " + money(spent));
-            if (number(balance) !== null) billing.push("Balance " + money(balance));
-            if (billing.length) return providerName(entry.provider) + " · " + billing.join(" · ");
+            var billing = billingText(entry.extraUsage, false);
+            if (billing) return providerName(entry.provider) + " · " + billing;
+            if (number(entry.credits) !== null)
+                return providerName(entry.provider) + " · Credits " + money(entry.credits);
             if (entry.details && entry.details.length) return providerName(entry.provider) + " · Billing available";
             return providerName(entry.provider) + " · Usage unavailable";
         }
-        var time = periodHoursText(item, now);
+        var time = periodRemainingText(item, now);
         return providerName(entry.provider) + " · " + item.label + " · " +
             quotaValue(item.remaining, mode) + "%" + (mode === "used" ? " used" : "") +
             (time ? " · " + time : "");

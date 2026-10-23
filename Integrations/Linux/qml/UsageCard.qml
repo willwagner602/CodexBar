@@ -35,11 +35,7 @@ Frame {
             spacing: 4
             Label { text: "Billing"; font.pixelSize: root.cardFontSize; font.bold: true; visible: root.visible }
             Label {
-                text: root.entry.extraUsage ?
-                    (root.entry.extraUsage.period ? root.entry.extraUsage.period + ": " : "") +
-                    (Usage.number(root.entry.extraUsage.used) !== null ? "Spent " + Usage.money(root.entry.extraUsage.used) : "") +
-                    (Usage.number(root.entry.extraUsage.balance) !== null ?
-                        (Usage.number(root.entry.extraUsage.used) !== null ? " · " : "") + "Balance " + Usage.money(root.entry.extraUsage.balance) : "") : ""
+                text: Usage.billingText(root.entry.extraUsage, true)
                 font.pixelSize: root.cardFontSize
                 Layout.fillWidth: true
                 wrapMode: Text.Wrap
@@ -47,7 +43,7 @@ Frame {
             }
         }
         Repeater {
-            model: Usage.longTermWindows(root.entry.windows)
+            model: Usage.cardWindows(root.entry.windows)
             ColumnLayout {
                 required property var modelData
                 Layout.fillWidth: true
