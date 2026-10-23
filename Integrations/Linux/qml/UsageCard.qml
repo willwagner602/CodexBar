@@ -30,16 +30,16 @@ Frame {
         }
         Label { text: root.entry.error || ""; font.pixelSize: root.cardFontSize; visible: text !== ""; Layout.fillWidth: true; wrapMode: Text.Wrap }
         ColumnLayout {
-            visible: root.entry.extraUsage && (root.entry.extraUsage.balance !== null || root.entry.extraUsage.used !== null)
+            visible: Usage.hasBilling(root.entry)
             Layout.fillWidth: true
             spacing: 4
             Label { text: "Billing"; font.pixelSize: root.cardFontSize; font.bold: true; visible: root.visible }
             Label {
                 text: root.entry.extraUsage ?
                     (root.entry.extraUsage.period ? root.entry.extraUsage.period + ": " : "") +
-                    (root.entry.extraUsage.used !== null ? "Spent " + Usage.money(root.entry.extraUsage.used) : "") +
-                    (root.entry.extraUsage.balance !== null ?
-                        (root.entry.extraUsage.used !== null ? " · " : "") + "Balance " + Usage.money(root.entry.extraUsage.balance) : "") : ""
+                    (Usage.number(root.entry.extraUsage.used) !== null ? "Spent " + Usage.money(root.entry.extraUsage.used) : "") +
+                    (Usage.number(root.entry.extraUsage.balance) !== null ?
+                        (Usage.number(root.entry.extraUsage.used) !== null ? " · " : "") + "Balance " + Usage.money(root.entry.extraUsage.balance) : "") : ""
                 font.pixelSize: root.cardFontSize
                 Layout.fillWidth: true
                 wrapMode: Text.Wrap

@@ -13,9 +13,11 @@ test('bar entries preserve compact summary quotas, order, privacy and the two-en
     assert.deepEqual(JSON.parse(JSON.stringify(model.barSegments(rows, 'remaining'))), [
         {provider: 'codex', tag: 'CX', text: '90%'},
         {provider: 'acme', tag: 'acme', text: '80%'}]);
-    assert.equal(model.summary(rows, 'remaining'), 'CX 90%  ·  acme 80%  +1');
+    assert.equal(model.summary(rows, 'remaining'),
+        'Codex · Session · 90%\nAcme · Session · 80%\nClaude · Session · 70%');
     assert.deepEqual([...model.barSegments(rows, 'used').map(segment => segment.text)], ['10%', '20%']);
-    assert.equal(model.summary(rows, 'used'), 'CX 10%  ·  acme 20%  +1');
+    assert.equal(model.summary(rows, 'used'),
+        'Codex · Session · 10% used\nAcme · Session · 20% used\nClaude · Session · 30% used');
     assert.equal(rows.length, 3, 'hidden providers stay available to the popup and notifications');
 });
 test('bar entries retain unavailable quotas and handle empty or single-provider snapshots', () => {
@@ -24,7 +26,7 @@ test('bar entries retain unavailable quotas and handle empty or single-provider 
     const rows = model.rows(JSON.stringify([{provider: 'claude', error: {message: 'private error'}}]));
     assert.deepEqual(JSON.parse(JSON.stringify(model.barSegments(rows))), [
         {provider: 'claude', tag: 'CL', text: '—'}]);
-    assert.equal(model.summary(rows), 'CL —');
+    assert.equal(model.summary(rows), 'Claude · Usage unavailable');
 });
 test('quota is clamped, missing quota stays unknown', () => {
     assert.equal(model.remaining({usedPercent: 28}), 72);
@@ -38,7 +40,7 @@ test('partial provider failures preserve healthy rows without leaking raw errors
         {provider: 'codex', usage: {primary: {usedPercent: 28, windowMinutes: 300}, identity: {accountEmail: 'private@example.com'}}},
         {provider: 'claude', error: {message: 'secret upstream response'}}
     ]));
-    assert.equal(model.summary(rows), 'CX 72%  ·  CL —');
+    assert.equal(model.summary(rows), 'Codex · 5 hour · 72%\nClaude · Usage unavailable');
     assert.equal(rows[0].windows[0].label, '5 hour');
     assert.ok(rows[1].error);
     assert.ok(!JSON.stringify(rows).includes('secret'));
@@ -262,7 +264,8 @@ test('family representatives still lead, so the summary and tray report the bind
             quotaSummary('gemini-5h', 'Gemini 5-hour', pool(0, 300, '2026-09-20T23:00:00Z')),
             quotaSummary('gemini-weekly', 'Gemini weekly', geminiWeekly),
             quotaSummary('claude-5h', 'Claude/GPT 5-hour', claudeSession)]}}]));
-    assert.equal(model.summary(rows, 'remaining'), 'antigravity 5%');
+    // The summary names the binding session pool; the bar still leads with the representatives.
+    assert.equal(model.summary(rows, 'remaining'), 'Antigravity · Claude/GPT 5-hour · 0% · 0/5 hours');
     assert.deepEqual([...rows[0].windows.slice(0, 2).map(window => window.label + ' ' + window.remaining)],
         ['Gemini weekly 5', 'Claude/GPT 5-hour 0']);
 });
@@ -701,7 +704,7 @@ test('a general quota that merely coincides with a scoped cap is not replaced by
         pace: {secondary: {deltaPercent: -8}}}]));
     assert.equal(detailedLabel(rows, 'remaining'), '7D 29% · -8%');
     assert.equal(detailedLabel(rows, 'remaining', {scopedCaps: true}), '7D 29% · Opus 29% · Nova 7% · -8%');
-    assert.equal(model.summary(rows, 'remaining'), 'CL 29%');
+    assert.equal(model.summary(rows, 'remaining'), 'Claude · 7 day · 29% · 7/7 days');
 });
 
 test("Claude's per-model cap shows when asked for, even while it reads the same as the week", () => {
@@ -744,7 +747,7 @@ test('the tray summary names the lane the bar leads with, not the tightest subqu
         secondary: {usedPercent: 90, windowMinutes: 43200},
         tertiary: {usedPercent: 10, windowMinutes: 43200}}}]));
     assert.equal(detailedLabel(rows, 'remaining'), '30D 75%');
-    assert.equal(model.summary(rows, 'remaining'), 'cursor 75%');
+    assert.equal(model.summary(rows, 'remaining'), 'Cursor · 30 day · 75%');
 });
 
 
@@ -764,7 +767,7 @@ test('a provider whose only quota is cadence-less still reports it in the bar an
             window: {usedPercent: 64, windowMinutes: null}},
         {id: 'image-model', title: 'Image model', usageKnown: true, window: {usedPercent: 99, windowMinutes: null}}]}}]));
     assert.equal(detailedLabel(rows, 'remaining'), 'Model A 36%');
-    assert.equal(model.summary(rows, 'remaining'), 'antigravity 36%');
+    assert.equal(model.summary(rows, 'remaining'), 'Antigravity · Model A · 36%');
     // Without the marker, per-model detail is not promoted to the provider's quota.
     const detailOnly = model.rows(JSON.stringify([{provider: 'antigravity', usage: {extraRateWindows: [
         {id: 'experimental', title: 'Experimental Model', usageKnown: true,
@@ -788,7 +791,7 @@ test('a per-model cap never becomes the tray headline while the provider reports
     const rows = model.rows(JSON.stringify([{provider: 'cursor', usage: {
         primary: {usedPercent: 25, windowMinutes: 43200},
         extraRateWindows: [{id: 'cursor-grok-bot', title: 'Grok Bot', window: {usedPercent: 100, windowMinutes: 10080}}]}}]));
-    assert.equal(model.summary(rows, 'remaining'), 'cursor 75%');
+    assert.equal(model.summary(rows, 'remaining'), 'Cursor · 30 day · 75%');
 });
 
 test('the bar keeps its single leading percentage until detail is switched on', () => {
@@ -798,7 +801,9 @@ test('the bar keeps its single leading percentage until detail is switched on', 
         {provider: 'gemini', usage: {secondary: weekly}}]));
     // Default: what this adapter has always drawn, including the two-provider limit and the count.
     assert.equal(compactLabel(rows, 'remaining'), 'CX 37%  ·  CL 37%  +1');
-    assert.equal(compactLabel(rows, 'remaining'), model.summary(rows, 'remaining'));
+    // The tray tooltip and snapshot summary carry the verbose headline, not the compact bar text.
+    assert.equal(model.summary(rows, 'remaining'),
+        'Codex · 5 hour · 37% · 5/5 hours\nClaude · 5 hour · 37% · 5/5 hours\nGemini · 7 day · 61% · 7/7 days');
     assert.equal(compactLabel(rows, 'used'), 'CX 63%  ·  CL 63%  +1');
     assert.equal(detailedLabel(rows, 'remaining', {maxProviders: 2}), 'CX 5H 37% · 7D 61% · +14%  ·  CL 5H 37% · 7D 61%  +1');
 });

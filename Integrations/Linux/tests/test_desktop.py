@@ -85,7 +85,7 @@ else:
         first = self.client('--snapshot')
         for _ in range(3):
             self.assertEqual(self.client('--background')['pid'], first['pid'])
-        self.assertEqual(first['summary'], 'CX 60%')
+        self.assertEqual(first['summary'], 'Codex · 5 hour · 60% · 5/5 hours')
         self.assertEqual(first['barEntries'], [{'provider': 'codex', 'tag': 'CX', 'text': '60%'}])
         self.assertNotIn('private@example.com', json.dumps(first))
         self.assertNotIn('executable', first)
@@ -128,7 +128,7 @@ else:
         self.assertRegex(windows[1]['key'], r'^extra:[a-f0-9]{64}$')
         self.assertEqual(windows[1]['label'], 'Model cap [hidden email]')
         self.assertEqual(windows[1]['remaining'], 7)
-        self.assertEqual(value['summary'], 'CL 61%')
+        self.assertEqual(value['summary'], 'Claude · 7 day · 61%')
         self.client('--usage')
         self.client('--refresh')
         refreshed = self.wait_for(lambda value: not value['busy'])
@@ -156,7 +156,7 @@ else:
         self.assertEqual([(window['label'], window['remaining']) for window in windows], [
             ('Gemini weekly', 5), ('Claude/GPT 5-hour', 0), ('Gemini 5-hour', 97), ('Claude/GPT weekly', 100)])
         self.assertEqual(len({window['key'] for window in windows}), 4)
-        self.assertEqual(value['summary'], 'antigravity 5%')
+        self.assertEqual(value['summary'], 'Antigravity · Claude/GPT 5-hour · 0% · 5/5 hours')
 
     def test_provider_window_labels_reach_private_snapshot(self):
         (self.root / 'state.json').write_text(json.dumps({
@@ -265,8 +265,8 @@ else:
         self.assertEqual(self.client('--snapshot')['barEntries'][0]['text'], '5H 37% · 7D 61% · Fable 0%')
         self.assertTrue(self.client('--configure', '{"showBarDetail":false}')['ok'])
         self.assertEqual(self.client('--snapshot')['barEntries'][0]['text'], '37% · Fable 0%')
-        # The tray tooltip keeps its own compact form.
-        self.assertEqual(value['summary'], 'CX 37%')
+        # The tray tooltip reads the same summary text as the dashboard.
+        self.assertEqual(value['summary'], 'Codex · 5 hour · 37% · 5/5 hours')
 
     def test_bar_provider_limit_validates_and_only_changes_display(self):
         providers = ['codex', 'claude', 'acme']
@@ -274,14 +274,20 @@ else:
             'provider': 'custom', 'providerOrder': providers}))['ok'])
         value = self.wait_for(lambda value: len(value.get('entries', [])) == 3 and not value['busy'])
         self.assertEqual([row['provider'] for row in value['barEntries']], providers[:2])
-        self.assertEqual(value['summary'], 'CX 60%  ·  CL 60%  +1')
+        self.assertEqual(value['summary'],
+                         'Codex · 5 hour · 60% · 5/5 hours\n'
+                         'Claude · 5 hour · 60% · 5/5 hours\n'
+                         'Acme · 5 hour · 60% · 5/5 hours')
         calls = (self.root / 'calls.jsonl').read_text()
         for limit in [1, 0, 80, 2]:
             self.assertTrue(self.client('--configure', json.dumps({'barProviders': limit}))['ok'])
             value = self.client('--snapshot')
             self.assertEqual([row['provider'] for row in value['barEntries']], providers[:limit or None])
             self.assertEqual([row['provider'] for row in value['entries']], providers)
-            self.assertEqual(value['summary'], 'CX 60%  ·  CL 60%  +1')
+            self.assertEqual(value['summary'],
+                             'Codex · 5 hour · 60% · 5/5 hours\n'
+                             'Claude · 5 hour · 60% · 5/5 hours\n'
+                             'Acme · 5 hour · 60% · 5/5 hours')
         self.assertEqual((self.root / 'calls.jsonl').read_text(), calls)
         settings = self.root / 'config/codexbar/linux.json'
         saved = settings.read_bytes()
@@ -341,7 +347,7 @@ else:
         self.client('--refresh')
         value = self.wait_for(lambda value: bool(value.get('error')))
         self.assertTrue(value['stale'])
-        self.assertEqual(value['summary'], 'CX 60%')
+        self.assertEqual(value['summary'], 'Codex · 5 hour · 60% · 5/5 hours')
 
     def test_quick_view_is_opt_in_and_never_scans_cost_on_open(self):
         calls = self.root / 'calls.jsonl'
@@ -425,7 +431,7 @@ else:
         count = len((self.root / 'calls.jsonl').read_text().splitlines())
         self.client('--configure', '{"quotaDisplay":"used","resetDisplay":"absolute"}')
         value = self.client('--snapshot')
-        self.assertEqual(value['summary'], 'CX 40%')
+        self.assertEqual(value['summary'], 'Codex · 5 hour · 40% used · 5/5 hours')
         self.assertEqual(value['barEntries'], [{'provider': 'codex', 'tag': 'CX', 'text': '40%'}])
         self.assertEqual(value['entries'][0]['windows'][0]['displayValue'], 40)
         self.assertEqual(value['entries'][0]['windows'][0]['displaySuffix'], 'used')

@@ -48,8 +48,8 @@ function rows(text, showIdentity) {
         var extras = (Array.isArray(usage.extraRateWindows) ? usage.extraRateWindows : []).filter(measured);
         // Antigravity lists every pool as a quota-summary extra and copies one per model family
         // into its positional windows. Show each representative in its positional slot under
-        // the family's title and drop its extra copy: the tray and summary read the leading
-        // windows, and the extra limit below must not hide a representative. The row keeps the
+        // the family's title and drop its extra copy: the tray reads the leading windows, and
+        // the extra limit below must not hide a representative. The row keeps the
         // pool's own key, so its alert history follows it when another pool becomes binding.
         // Families are matched as Core selects them, because two families can report equal values.
         var families = {primary: "gemini", secondary: "claude-gpt"};
@@ -160,6 +160,13 @@ function providerCost(value) {
     var result = {period: displayText(value.period, false).trim(), currency: displayText(value.currencyCode, false).trim(),
         used: number(value.used), limit: number(value.limit), balance: number(value.balance)};
     return result.used === null && result.limit === null && result.balance === null ? null : result;
+}
+
+// A usage card shows its billing section only when a spend or balance amount is measurable;
+// values that arrive as null or undefined must not turn the whole binding into undefined.
+function hasBilling(entry) {
+    var cost = entry && entry.extraUsage;
+    return !!cost && (number(cost.used) !== null || number(cost.balance) !== null);
 }
 
 function number(value) { return typeof value === "number" && isFinite(value) ? value : null; }
